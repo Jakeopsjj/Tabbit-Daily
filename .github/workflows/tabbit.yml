@@ -1,0 +1,75 @@
+name: 🌐 Tabbit Daily
+
+on:
+  schedule:
+    # GitHub cron 使用 UTC；北京时间每天 08:17。
+    - cron: "17 0 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: Tabbit-Daily
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      TZ: Asia/Shanghai
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Detect account configuration
+        id: config
+        env:
+          TABBIT_CN_ACCOUNTS: ${{ secrets.TABBIT_CN_ACCOUNTS }}
+          TABBIT_INTL_ACCOUNTS: ${{ secrets.TABBIT_INTL_ACCOUNTS }}
+        run: |
+          if [ -n "$TABBIT_CN_ACCOUNTS" ]; then
+            echo "cn=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "cn=false" >> "$GITHUB_OUTPUT"
+          fi
+          if [ -n "$TABBIT_INTL_ACCOUNTS" ]; then
+            echo "intl=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "intl=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run Tabbit China
+        if: steps.config.outputs.cn == 'true'
+        env:
+          TABBIT_CN_ACCOUNTS: ${{ secrets.TABBIT_CN_ACCOUNTS }}
+          TABBIT_CLIENT_VERSION: ${{ secrets.TABBIT_CLIENT_VERSION }}
+          TABBIT_UNLOCK_PRO: ${{ secrets.TABBIT_UNLOCK_PRO }}
+          PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN }}
+          BARK_URL: ${{ secrets.BARK_URL }}
+          WECOM_WEBHOOK: ${{ secrets.WECOM_WEBHOOK }}
+        run: python tabbit_cn_daily.py
+
+      - name: Run Tabbit International
+        if: ${{ always() && steps.config.outputs.intl == 'true' }}
+        env:
+          TABBIT_INTL_ACCOUNTS: ${{ secrets.TABBIT_INTL_ACCOUNTS }}
+          TABBIT_CLIENT_VERSION: ${{ secrets.TABBIT_CLIENT_VERSION }}
+          TABBIT_UNLOCK_PRO: ${{ secrets.TABBIT_UNLOCK_PRO }}
+          PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN }}
+          BARK_URL: ${{ secrets.BARK_URL }}
+          WECOM_WEBHOOK: ${{ secrets.WECOM_WEBHOOK }}
+        run: python tabbit_intl_daily.py
+
+      - name: No account configured
+        if: ${{ always() && steps.config.outputs.cn != 'true' && steps.config.outputs.intl != 'true' }}
+        run: echo "::warning::未配置 TABBIT_CN_ACCOUNTS 或 TABBIT_INTL_ACCOUNTS，跳过签到。"

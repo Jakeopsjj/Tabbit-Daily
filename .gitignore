@@ -1,0 +1,20 @@
+# Local credentials and runtime data
+.env
+*.log
+*.result.json
+tabbit_cn_state.json
+tabbit_intl_state.json
+tabbit_cn_result.json
+tabbit_intl_result.json
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+
+# Editors and operating systems
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
