@@ -37,7 +37,7 @@ except Exception:
     pass
 
 
-SCRIPT_VERSION = "1.0.0"
+SCRIPT_VERSION = "1.0.1"
 REALM = "cn"
 REALM_LABEL = "国内版"
 BASE_URL = "https://web.tabbit.com"
@@ -610,6 +610,24 @@ def interpret_sign_in(payload: Any) -> Dict[str, Any]:
     }
 
 
+def pending_confirmation(
+    message: str,
+    reward: str = "",
+    readback: Optional[Mapping[str, Any]] = None,
+) -> Dict[str, Any]:
+    result: Dict[str, Any] = {
+        "outcome": "pending_confirmation",
+        "ok": True,
+        "neutral": True,
+        "succeeded": False,
+        "reward": reward,
+        "message": message,
+    }
+    if readback is not None:
+        result["readback"] = dict(readback)
+    return result
+
+
 def extract_usage_percentage(payload: Any) -> str:
     if not isinstance(payload, dict):
         raise ContractError("额度响应不是 JSON 对象")
@@ -834,6 +852,33 @@ def process_account(account: Account, query_only: bool = False) -> Dict[str, Any
         base_result["usage_percentage"] = usage_percentage
         claim_payload = client.claim(usage_percentage)
         outcome = interpret_sign_in(claim_payload)
+        if outcome["outcome"] == "success":
+            try:
+                readback_payload = client.query_status()
+                readback = interpret_status(readback_payload)
+            except TabbitError as error:
+                outcome = pending_confirmation(
+                    "签到请求已受理，状态回读失败，到账待确认",
+                    outcome["reward"],
+                    {
+                        "scene_code": "daily_sign_in",
+                        "error": sanitize_message(str(error), account),
+                    },
+                )
+            else:
+                evidence = {
+                    "scene_code": "daily_sign_in",
+                    "signed_today": readback["signed_today"],
+                }
+                if readback["signed_today"]:
+                    outcome["message"] = "签到成功，状态回读 signed_today=true"
+                    outcome["readback"] = evidence
+                else:
+                    outcome = pending_confirmation(
+                        "签到请求已受理，状态回读尚未确认，待确认",
+                        outcome["reward"],
+                        evidence,
+                    )
         outcome["message"] = sanitize_message(outcome["message"], account)
         outcome["reward"] = sanitize_message(outcome["reward"], account)
         base_result.update(outcome)
@@ -972,13 +1017,23 @@ def build_report(results: Sequence[Mapping[str, Any]], query_only: bool) -> Tupl
         summary = "查询完成 %d · 失败 %d" % (queried, failed)
     else:
         successes = sum(1 for result in results if result.get("outcome") == "success")
+        pending = sum(
+            1
+            for result in results
+            if result.get("outcome") == "pending_confirmation"
+        )
         neutral = sum(
             1
             for result in results
             if result.get("outcome") in ("already_signed", "activity_closed")
         )
-        failed = len(results) - successes - neutral
-        summary = "成功 %d · 中性 %d · 失败 %d" % (successes, neutral, failed)
+        failed = len(results) - successes - pending - neutral
+        summary = "成功 %d · 待确认 %d · 中性 %d · 失败 %d" % (
+            successes,
+            pending,
+            neutral,
+            failed,
+        )
     lines.extend(["", summary])
     return title, "\n".join(lines)
 
