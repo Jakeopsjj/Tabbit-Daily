@@ -6,6 +6,8 @@
 
 **分别维护 Tabbit 国内版与国际版登录态，安静完成每日 `daily_sign_in` 的单文件脚本。**
 
+> 当前版本：**v1.0.1**（2026-11-12） · 最新更新：claim 后仅以 signed_today=true 回读确认签到成功
+
 [简体中文](README.md) · [English](docs/README.en.md) · [繁體中文](docs/README.zh-Hant.md) · [日本語](docs/README.ja.md) · [한국어](docs/README.ko.md) · [Português (BR)](docs/README.pt-BR.md)
 
 <p>
