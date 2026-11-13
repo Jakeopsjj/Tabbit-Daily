@@ -33,11 +33,16 @@ class InternationalBehaviorTests(unittest.TestCase):
 
     def test_intl_success_flow_never_calls_cn_host(self):
         class FakeClient:
-            def __init__(self, _):
+            def __init__(self, _, readback=None):
                 self.usage = ""
+                self.status_calls = 0
+                self.readback = readback or status_payload(signed_today=True)
 
             def query_status(self):
-                return status_payload()
+                self.status_calls += 1
+                if self.status_calls == 1:
+                    return status_payload()
+                return self.readback
 
             def query_usage_percentage(self):
                 return "8.00%"
@@ -49,11 +54,41 @@ class InternationalBehaviorTests(unittest.TestCase):
             def close(self):
                 pass
 
-        with mock.patch.object(MODULE, "TabbitClient", FakeClient):
+        fake = FakeClient(None)
+        with mock.patch.object(MODULE, "TabbitClient", lambda _: fake):
             result = MODULE.process_account(account())
         self.assertEqual("success", result["outcome"])
         self.assertTrue(result["ok"])
+        self.assertTrue(result["readback"]["signed_today"])
+        self.assertEqual(2, fake.status_calls)
         self.assertNotIn("web.tabbit.com", MODULE.BASE_URL)
+
+    def test_intl_success_is_pending_without_signed_today_readback(self):
+        class FakeClient:
+            def __init__(self, _):
+                self.status_calls = 0
+
+            def query_status(self):
+                self.status_calls += 1
+                if self.status_calls == 1:
+                    return status_payload()
+                return status_payload(signed_today=False)
+
+            def query_usage_percentage(self):
+                return "8.00%"
+
+            def claim(self, usage):
+                return sign_in_payload("success", "")
+
+            def close(self):
+                pass
+
+        with mock.patch.object(MODULE, "TabbitClient", FakeClient):
+            result = MODULE.process_account(account())
+        self.assertEqual("pending_confirmation", result["outcome"])
+        self.assertTrue(result["neutral"])
+        self.assertFalse(result["succeeded"])
+        self.assertIn("待确认", result["message"])
 
 
 if __name__ == "__main__":

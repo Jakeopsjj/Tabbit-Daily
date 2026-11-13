@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.0.1 - 2026-11-12
+
+- claim 返回 `success` 后再次查询 `daily_sign_in`，仅 `signed_today=true` 才确认成功。
+- 回读为 false、字段缺失或回读失败时标记 `pending_confirmation`，不再只凭 claim 回执报告成功。
+- 报告新增独立“待确认”计数；新增 CN/INTL 回读回归，全套 `42` 项测试通过。
+
 ## v1.0.0 - 2026-11-04
 
 - 新增 `tabbit_cn_daily.py`，固定使用 `https://web.tabbit.com` 与 `TABBIT_CN_ACCOUNTS`。

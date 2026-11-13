@@ -17,19 +17,26 @@ def account(module, number=1):
 
 
 class FakeClient:
-    def __init__(self, status, usage="0.00%", claim=None, error=None):
+    def __init__(self, status, usage="0.00%", claim=None, error=None, readback=None):
         self.status = status
         self.usage = usage
         self.claim_payload = claim
         self.error = error
+        self.readback = readback or status_payload(signed_today=True)
         self.claim_calls = 0
         self.usage_calls = 0
+        self.status_calls = 0
         self.closed = False
 
     def query_status(self):
+        self.status_calls += 1
         if self.error:
             raise self.error
-        return self.status
+        if self.status_calls == 1:
+            return self.status
+        if isinstance(self.readback, Exception):
+            raise self.readback
+        return self.readback
 
     def query_usage_percentage(self):
         self.usage_calls += 1
@@ -61,7 +68,36 @@ class ChinaBehaviorTests(unittest.TestCase):
         self.assertEqual("reset_coupon", result["reward"])
         self.assertEqual("37.50%", fake.claim_usage)
         self.assertEqual(1, fake.claim_calls)
+        self.assertEqual(2, fake.status_calls)
+        self.assertTrue(fake.readback["results"][1]["signed_today"])
         self.assertTrue(fake.closed)
+
+    def test_success_requires_signed_today_readback(self):
+        fake = FakeClient(
+            status_payload(),
+            claim=sign_in_payload("success", "reset_coupon"),
+            readback=status_payload(signed_today=False),
+        )
+        result = self.run_with_client(fake)
+        self.assertEqual("pending_confirmation", result["outcome"])
+        self.assertTrue(result["ok"])
+        self.assertTrue(result["neutral"])
+        self.assertFalse(result["succeeded"])
+        self.assertIn("待确认", result["message"])
+        self.assertEqual("reset_coupon", result["reward"])
+        self.assertFalse(result["readback"]["signed_today"])
+
+    def test_success_readback_failure_is_pending(self):
+        fake = FakeClient(
+            status_payload(),
+            claim=sign_in_payload("success", "reset_coupon"),
+            readback=MODULE.ApiError(502, "status down"),
+        )
+        result = self.run_with_client(fake)
+        self.assertEqual("pending_confirmation", result["outcome"])
+        self.assertFalse(result["succeeded"])
+        self.assertIn("待确认", result["message"])
+        self.assertIn("status down", result["readback"]["error"])
 
     def test_already_signed_is_neutral_and_does_not_post(self):
         fake = FakeClient(status_payload(signed_today=True))
@@ -158,6 +194,20 @@ class ChinaBehaviorTests(unittest.TestCase):
         self.assertEqual("failed", results[0]["outcome"])
         self.assertTrue(results[1]["ok"])
         self.assertEqual("success", results[1]["outcome"])
+
+    def test_report_counts_pending_separately(self):
+        title, report = MODULE.build_report(
+            [
+                {
+                    "name": "pending",
+                    "outcome": "pending_confirmation",
+                    "message": "待确认",
+                }
+            ],
+            query_only=False,
+        )
+        self.assertIn("Tabbit", title)
+        self.assertIn("成功 0 · 待确认 1 · 中性 0 · 失败 0", report)
 
 
 if __name__ == "__main__":

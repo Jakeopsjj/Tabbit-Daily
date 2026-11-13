@@ -6,6 +6,8 @@
 
 **分别维护 Tabbit 国内版与国际版登录态，安静完成每日 `daily_sign_in` 的单文件脚本。**
 
+> 当前版本：**v1.0.1**（2026-11-13） · 最新更新：claim 后仅以 signed_today=true 回读确认签到成功
+
 [简体中文](README.md) · [English](docs/README.en.md) · [繁體中文](docs/README.zh-Hant.md) · [日本語](docs/README.ja.md) · [한국어](docs/README.ko.md) · [Português (BR)](docs/README.pt-BR.md)
 
 <p>
@@ -193,10 +195,11 @@ python tabbit_cn_daily.py --no-notify    # 不推送
 
 | 上游状态 | 本地状态 | 说明 |
 | :--- | :--- | :--- |
-| `sign_in_result=success` | 成功 | 唯一计为本次领取成功。 |
+| `sign_in_result=success` 且回读 `signed_today=true` | 成功 | claim 后必须再次查询状态确认。 |
 | `sign_in_result=already_signed` | 中性完成 | 今日已签，不重复领奖。 |
 | `signed_today=true` | 中性完成 | 查询阶段已经确认今日签过，不再 POST。 |
 | `activity_open=false` | 中性完成 | 活动未开启，不空打签到接口。 |
+| claim success 但状态未确认 | 待确认 | 保留奖励文案，不报告已到账。 |
 | 其他非空 `sign_in_result` | 失败 | 保留脱敏后的业务结论。 |
 | 缺少 `daily_sign_in` 结果 | 失败 | 不以 HTTP 200 代替业务成功。 |
 
@@ -236,3 +239,7 @@ python -m unittest discover -s tests -v
 ## 📄 License
 
 代码以 [MIT License](LICENSE) 发布。仓库展示规则、作者身份与官方渠道说明见 [NOTICE.md](NOTICE.md)。本项目按公开协议事实独立实现，不包含或复制上游 AGPL 实现源码。
+
+## 📦 版本与发布
+
+- 当前发布版：`v1.0.1`（2026-11-12，签到后状态回读确认）。
